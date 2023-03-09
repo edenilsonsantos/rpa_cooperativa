@@ -1,0 +1,20 @@
+# Passos para empacotar a biblioteca
+# pip install --trusted-host pypi.python.org --trusted-host files.pythonhosted.org --trusted-host pypi.org pip setuptools
+# pip install --trusted-host pypi.python.org --trusted-host files.pythonhosted.org --trusted-host pypi.org pip twine
+###########################################
+1 - crie uma pasta do projeto
+2 - crie sub_pasta com o nome da biblioteca
+3 - coloque o arquivo.py da biblioteca dentro da sub_pasta, item 2
+4 - crie o __init__.py na sub_pasta, item 2
+5 - crie um arquivo LICENCE, dentro da pasta do projeto, item 1
+6 - crie um arquivo README.md, dentro da pasta do projeto, item 1
+7 - instale a lib setuptools, pip install setuptools
+8 - instale a lib twine, pip install twine
+9 - crie um arquivo setup.py, dentro da pasta do projeto, item 1
+10 - rode este comando no terminal: python setup.py sdist
+11 - crie sua conta em https://test.pypi.org/  e  https://pypi.org/
+12 - envie o pacote para o ambiente de testes antes https://test.pypi.org/
+13 - enviando para ambiente testes: 
+13.1 - comando: twine upload --repository-url https://test.pypi.org/legacy/ dist/*
+14 - enviando para pypi official:
+14.1 - comando: twine upload dist/*

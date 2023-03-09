@@ -1,0 +1,10 @@
+LICENSE
+README.md
+setup.py
+rpa_coop/__init__.py
+rpa_coop/rpa_coop.py
+rpa_cooperativa.egg-info/PKG-INFO
+rpa_cooperativa.egg-info/SOURCES.txt
+rpa_cooperativa.egg-info/dependency_links.txt
+rpa_cooperativa.egg-info/requires.txt
+rpa_cooperativa.egg-info/top_level.txt
