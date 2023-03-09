@@ -3,6 +3,10 @@ import pandas as pd
 from sqlalchemy import create_engine
 from urllib.request import urlretrieve
 import urllib.parse
+import site
+user_site_packages = site.getusersitepackages()
+user_site_packages = user_site_packages.replace('Roaming', 'Local\\Programs').replace('site-packages','Lib\\site-packages')
+
 
 
 class Fluid:
@@ -748,8 +752,202 @@ class Dados:
 
 
 class Acc:
-
+    import pyautogui as p
+    import subprocess
+    import pyperclip
+    
     def __init__(self):
         pass
+
+    
+    def open_acclient(self, siat_siac_sacg, transacional=True):
+        # Open AC Client
+        try:
+            self.p.sleep(1)
+            os.system('taskkill /F /FI "WindowTitle eq C:\\ProgramData\\ac\\teoff-exe*" /T')
+        except Exception:
+            pass
+        
+        try:
+            os.system('taskkill /F /IM javaw_ac.exe')
+            self.p.sleep(1)
+        except Exception:
+            pass
+        
+        user_acc = os.getenv('user_acc')
+        pw_acclient = os.getenv('pw_acclient')
+         
+        self.subprocess.Popen("C:\\Users\\Public\\Desktop\\AC Client.lnk",shell=True)
+        self.p.sleep(15)
+        
+
+        # pegar retangulo da janela pelo titulo parcial
+        janela = self.p.getWindowsWithTitle('Aplicações Core - Login')[0]
+        janela.activate()
+
+        self.p.press('tab')
+        self.p.press('tab')
+        # digitar usuario
+        self.p.typewrite(user_acc)
+        self.p.press('tab')
+        self.p.typewrite(pw_acclient)
+        self.p.press('tab')
+        self.p.press('enter')
+        print('passou do login')
+
+        self.p.sleep(12)
+        # pegar retangulo da janela pelo titulo parcial
+        janela = self.p.getWindowsWithTitle('AC Client')[0]
+        janela.activate()
+        janela.left
+        self.p.sleep(1)
+        self.p.press('pgdn')
+
+        # Selecionar o MENU SIAT
+        posicao = 0
+        pasta_imagens = user_site_packages +  '\\rpa_coop\\img\\'
+                   
+        
+        if 'SACG' in str(siat_siac_sacg).upper():
+            try:
+                posicao = self.p.locateOnScreen(pasta_imagens + 'sacg_branco.png')
+            except:
+                posicao = self.p.locateOnScreen(pasta_imagens + 'sacg_verde.png')
+        elif 'SIAT' in str(siat_siac_sacg).upper():
+            try:
+                posicao = self.p.locateOnScreen(pasta_imagens + 'siat_branco.png')
+            except:
+                posicao = self.p.locateOnScreen(pasta_imagens + 'siat_verde.png')
+        elif 'SIAC' in str(siat_siac_sacg).upper():
+            try:
+                posicao = self.p.locateOnScreen(pasta_imagens + 'siac_amarelo.png')
+            except:
+                posicao = self.p.locateOnScreen(pasta_imagens + 'siac_verde.png')
+        time.sleep(1)
+        self.p.click(posicao)
+        print('selecionou o menu: siat, siac, sacg')
+        time.sleep(3)
+        
+        if transacional:
+            self.p.moveTo(janela.left + 48, janela.top + 165)
+            time.sleep(1)
+            self.p.doubleClick()
+        else:
+            self.p.moveTo(janela.left + 48, janela.top + 245)
+            self.p.doubleClick()
+        time.sleep(7)
+        
+           
+    def select_menu_letras(self, letras):
+        self.p.sleep(1)
+        janela = self.p.getWindowsWithTitle('teoff-exe')[0]
+        janela.activate()
+        # Selecionar o Menu de opções
+        self.p.sleep(1)
+        if len(letras) == 2:
+            self.p.typewrite(letras[0])
+            self.p.sleep(1)
+            self.p.typewrite(letras[1])
+            self.p.sleep(1)
+        elif len(letras) == 3:
+            self.p.typewrite(letras[0])
+            self.p.sleep(1)
+            self.p.typewrite(letras[1])
+            self.p.sleep(1)
+            self.p.typewrite(letras[2])
+            self.p.sleep(1)   
+        elif len(letras) == 4:
+            self.p.typewrite(letras[0])
+            self.p.sleep(1)
+            self.p.typewrite(letras[1])
+            self.p.sleep(1)
+            self.p.typewrite(letras[2])
+            self.p.sleep(1)
+            self.p.typewrite(letras[3])
+            self.p.sleep(1)
+        elif len(letras) == 5:
+            self.p.typewrite(letras[0])
+            self.p.sleep(1)
+            self.p.typewrite(letras[1])
+            self.p.sleep(1)
+            self.p.typewrite(letras[2])
+            self.p.sleep(1)
+            self.p.typewrite(letras[3])
+            self.p.sleep(1)
+            self.p.typewrite(letras[4])
+            self.p.sleep(1)
+        elif len(letras) == 6:
+            self.p.typewrite(letras[0])
+            self.p.sleep(1)
+            self.p.typewrite(letras[1])
+            self.p.sleep(1)
+            self.p.typewrite(letras[2])
+            self.p.sleep(1)
+            self.p.typewrite(letras[3])
+            self.p.sleep(1)
+            self.p.typewrite(letras[4])
+            self.p.sleep(1)
+            self.p.typewrite(letras[5])
+            self.p.sleep(1)
+        elif len(letras) == 7:
+            self.p.typewrite(letras[0])
+            self.p.sleep(1)
+            self.p.typewrite(letras[1])
+            self.p.sleep(1)
+            self.p.typewrite(letras[2])
+            self.p.sleep(1)
+            self.p.typewrite(letras[3])
+            self.p.sleep(1)
+            self.p.typewrite(letras[4])
+            self.p.sleep(1)
+            self.p.typewrite(letras[5])
+            self.p.sleep(1)
+            self.p.typewrite(letras[6])
+            self.p.sleep(1)
+        else:
+            print('ops funcao entende apenas 2, 3, 4, 5, 6 ou 7 letras')
+            
+                
+    def get_text(self, ini_linha=22, fim_linha=632, topo1=407, topo2=407):
+        time.sleep(1)
+        janela = self.p.getWindowsWithTitle('teoff-exe')[0]
+        time.sleep(1)
+        janela.activate()
+        self.p.moveTo(janela.left + ini_linha, janela.top + topo1)
+        self.p.sleep(1)
+        self.p.dragTo(janela.left + fim_linha, janela.top + topo2, 0.8, button='left')
+        self.p.moveTo(janela.left + ini_linha, janela.top + topo2)
+        self.p.rightClick()
+        capturado = self.pyperclip.paste()
+        print(f'texto capturado:{capturado}')
+        return capturado            
+            
+            
+    def exist_text(self, texto_esperado, max_tentativas=7, segundos_entre_tentativas=3, ini_linha=22, fim_linha=632, topo1=407, topo2=407, continua_seerro=False):
+        time.sleep(1)
+        self.pyperclip.copy('')
+        tentativas = 0
+        time.sleep(1)
+        captura = self.get_text(ini_linha, fim_linha, topo1, topo2)
+        resultado = True
+        while not texto_esperado in captura and tentativas < max_tentativas:
+            print('esperando texto: ', texto_esperado)
+            self.p.sleep(segundos_entre_tentativas)
+            captura = self.get_text(ini_linha, fim_linha, topo1, topo2)
+            tentativas += 1
+            if tentativas == max_tentativas:
+                resultado = False
+        print(resultado)
+        if resultado == False and continua_seerro == False:
+            raise Exception(f'Execução pausada. O texto: "{texto_esperado}" não foi localizado durante a execução do robô.')
+        return resultado
+ 
+       
+       
+            
+            
+            
+            
+
 
 
