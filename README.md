@@ -1,5 +1,9 @@
 # Exemplos de utilizacao da bilioteca rpa_coop
 
+
+## Disponível em Pypi.org
+https://pypi.org/project/rpa-cooperativa/
+
 ```python
 pip install --trusted-host pypi.python.org --trusted-host files.pythonhosted.org --trusted-host pypi.org pip rpa-cooperativa
 ```
