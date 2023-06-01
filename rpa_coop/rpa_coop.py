@@ -1,5 +1,5 @@
 import os, requests, json, time, re
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 import pandas as pd
 from sqlalchemy import create_engine
 from urllib.request import urlretrieve
@@ -10,7 +10,6 @@ ssl._create_default_https_context = ssl._create_unverified_context
 
 user_site_packages = site.getusersitepackages()
 user_site_packages = user_site_packages.replace('Roaming', 'Local\\Programs').replace('site-packages','Lib\\site-packages')
-
 
 
 def gerador_pwd(palavra_chave:str, select_atributo='usuario', retorna_atributo=True, retorna_dicionario=False ,print_atributo=False, mostrar_todas_credenciais=False):
@@ -78,8 +77,11 @@ def gerador_pwd(palavra_chave:str, select_atributo='usuario', retorna_atributo=T
         fernet = Fernet(hash_validador) 
         msg_encripted = valor
         msg = bytes(msg_encripted, "utf-8") 
-        valor = fernet.decrypt(msg).decode("utf-8")
-        df['senha'] = valor
+        try:
+            valor = fernet.decrypt(msg).decode("utf-8")
+            df['senha'] = valor
+        except:
+            pass
         credencial_atributos = df.to_dict(orient='records')
         credenciais = credencial_atributos[0]
         valor = credenciais.get(select_atributo)
@@ -89,14 +91,41 @@ def gerador_pwd(palavra_chave:str, select_atributo='usuario', retorna_atributo=T
         return credenciais
 
 
-    
+class Adobe:
+    def __init__(self):
+        self.token_api_adobe = str(gerador_pwd('api_adobe', 'senha'))
+        self.url_api_adobe = str(gerador_pwd('api_adobe', 'ip_host'))
+        
+        
+    def alterar_status_usuario(self, email_usuario:str, status_usuario:str):
+        '''status_usuario: ACTIVE, INACTIVE'''
+        token_get_user = self.token_api_adobe
+        url = f'{self.url_api_adobe}users'
+        headers = { "Authorization": f"{token_get_user}"}
+        response = requests.get(url, headers=headers)
+        df = pd.DataFrame(response.json()['userInfoList'])
+        for x in df.itertuples():
+            if str(x.email) == str(email_usuario):
+                id_usuario = str(x.id)
+                break
+            else:
+                id_usuario = 'Não encontrado'
+
+        if id_usuario == 'Não encontrado': raise Exception('Usuário não encontrado')
+        url = f'{self.url_api_adobe}users/{id_usuario}/state'
+        headers = { "Authorization": f"{token_get_user}"}
+        body = {"state": f"{status_usuario}", "comment": "desativado por rpa"}
+        response = requests.put(url, headers=headers, json=body)
+        return response
+        
+                
 class Dados:
     
-
     def __init__(self):
         self.ip_planning = str(os.getenv('ip_planning'))
         self.user_planning = str(os.getenv('user_planning'))
         self.pw_bd_planning = str(urllib.parse.quote_plus(os.getenv('pw_bd_planning'))) 
+        
         self.user_planning_controles = str(gerador_pwd('user_planning_controles', 'senha'))
         self.pw_planning_controles = str(gerador_pwd('pw_planning_controles', 'senha'))
         
@@ -112,6 +141,9 @@ class Dados:
         self.ip_denodo = str(gerador_pwd('denodo_web', 'ip_host'))
         self.user_denodo = str(gerador_pwd('denodo_web', 'usuario'))
         self.pw_denodo = str(urllib.parse.quote_plus(gerador_pwd('denodo_web', 'senha')))
+        
+        self.token_api_denodo = str(gerador_pwd('token_api_denodo', 'senha'))
+        self.url_api_denodo = str(gerador_pwd('token_api_denodo', 'ip_host'))
 
         
     def criar_engine(self, db:str, user_db='user_opcional', password_db='senha_opcional', ip_ou_host_db='ip_host_opcional', porta='3306', library_sql='mysqlconnector'):
@@ -139,8 +171,7 @@ class Dados:
             conexao = create_engine(f'mysql+{library_sql}://{user_db}:{password_db}@{ip_ou_host_db}:{porta}/{db}')
         return conexao
             
-                
-                   
+                         
     def criar_conexao(self, db:str, user_db='user_opcional', password_db='senha_opcional', ip_ou_host_db='ip_host_opcional', porta='3306', library_sql='mysqlconnector'):
         '''
         retorna conexao com db, db='parametro_obrigatorio' \n
@@ -167,6 +198,38 @@ class Dados:
         return conexao
             
         
+    def api_consulta_denodo(self, database:str, tabela:str, colunas:str, filtro_where="opcional"):
+        '''
+        filtro = "coluna2 eq 'SIM' and coluna3 eq 'Ativo'" \n
+        df = dados.api_consulta_denodo('ldw', 'nome_da_tabela', 'coluna1, coluna5', filtro) \n\n
+        
+        # operadores para filtro where: \n
+        eq = igual \n
+        lt = menor que \n
+        le = menor ou igual \n
+        ne = diferente \n
+        ge = maior ou igual \n
+        gt = maior que \n       
+        
+        '''
+        df = pd.DataFrame()
+        requests.packages.urllib3.disable_warnings()
+        if filtro_where == "opcional":
+            url = f"{self.url_api_denodo}/{database}/views/{tabela}?$select={colunas}"
+        else:
+            url = f"{self.url_api_denodo}/{database}/views/{tabela}?$select={colunas}&$filter={filtro_where}"
+        payload={}
+        headers = {'Accept': 'application/xhtml+xml;q=0.9,application/json', 'Authorization': self.token_api_denodo}
+        response = requests.request("GET", url, headers=headers, data=payload, verify=False)
+        # print(response.text.encode('utf8'))
+        rows = json.loads(response.content)
+        try:
+            df = pd.DataFrame(rows['elements'])
+        except:
+            print('erro ao converter para DataFrame, json retornou: \n', response.text.encode('utf8'))
+        return df   
+        
+     
     def consultar_banco_dados(self, conexao_engine, query_sql:str, retorna_DataFrame=True):
         '''
         retorna um DataFrame pandas \n
@@ -217,6 +280,19 @@ class Dados:
         print('Inserção realizada com sucesso')
 
 
+    def delete_linhas_banco_dados(self, conexao_engine, query_sql):
+        '''
+        realiza delete na tabela do banco de dados \n
+        exemplo de query: \n
+        "DELETE FROM rpa_fila WHERE id_fila = 9161" \n
+        '''
+        aux_query = str(query_sql).upper()
+        if 'WHERE' in aux_query:
+            conexao_engine.execute(query_sql)
+            print('Exclusão realizada com sucesso')
+        else:
+            print('Não foi possível realizar a exclusão, é necessário informar o WHERE na query')
+            
 
 class Fluid:
     
@@ -236,7 +312,8 @@ class Fluid:
         self.pw_bd_planning = str(urllib.parse.quote_plus(os.getenv('pw_bd_planning'))) 
         
         
- 
+        
+        
     def anexar_arquivo_fluid(self, cod_processo:str, path_file:str, tipo_arquivo:str):
         '''
             num_processo = '497305'\n
@@ -479,7 +556,7 @@ class Fluid:
             return msg, acao 
         
     
-    def criar_processo_rascunho(self, id_tipo_processo:str, id_empresa_origem=1, id_empresa_destino=1, responsavel_destino=2735, arvore=0):
+    def criar_processo_rascunho(self, id_tipo_processo:str, id_empresa_origem=1, id_empresa_destino=1, id_usuario=0, responsavel_destino=0, arvore=0):
         '''
             id_processo, nodo_inicial = post_criar_processo(id_tipo_processo)\n
             ou\n
@@ -490,6 +567,8 @@ class Fluid:
         
         if id_empresa_origem != 1: id_empresa_origem = self.depara(id_empresa_origem)
         if id_empresa_destino != 1: id_empresa_destino = self.depara(id_empresa_destino)
+        if id_usuario == 0: id_usuario = self.id_usuario
+        if responsavel_destino == 0: responsavel_destino = self.id_usuario
         
         time.sleep(1)
         id_versao_arvore = 0
@@ -502,8 +581,8 @@ class Fluid:
         obj_acao = {
             "tipo_processo": id_tipo_processo, # id do tipo de processo fluid
             "tempo": tempo_minutos, # tempo em minutos
-            "responsavel_criacao": self.id_usuario, # id do usuário fluid
-            "responsavel_origem": self.id_usuario, # id do usuário fluid
+            "responsavel_criacao": id_usuario, # id do usuário fluid
+            "responsavel_origem": id_usuario, # id do usuário fluid
             "responsavel_destino": responsavel_destino,
             "empresa_origem": id_empresa_origem, 
             "empresa_destino": id_empresa_destino,
@@ -762,7 +841,7 @@ class Fluid:
             return res.status_code
     
     
-    def protocolar_processo_fluid(self, cod_processo: str, id_tipo_processo: str,  mensagem: str, id_empresa_origem='1', id_empresa_destino='1', nome_do_nodo ='selecionado_proximo_nodo', abertura_de_processo= False, cod_nodo=0, cod_acao = 0, usuario_destino=2735):
+    def protocolar_processo_fluid(self, cod_processo: str, id_tipo_processo: str,  mensagem: str, id_empresa_origem='1', id_empresa_destino='1', nome_do_nodo ='selecionado_proximo_nodo', abertura_de_processo= False, cod_nodo=0, cod_acao = 0, id_usuario=0, usuario_destino=0):
         ''' 
             post_protocolar_processo_fluid(processo, id_tipo_processo, msg, nome_nodo_destino, empresa_orig, empresa_dest) \n
             post_protocolar_processo_fluid('497305', '945', 'automação realizada') \n
@@ -771,6 +850,10 @@ class Fluid:
             post_protocolar_processo_fluid('497305', '945', 'automação realizada', 'Concluir') \n
             
         '''
+        
+        if id_usuario == 0: id_usuario = self.id_usuario
+        if usuario_destino == 0: usuario_destino = self.id_usuario
+        
         url = f'{self.url_api}/processos/protocolar'
         headers = { "Content-Type": "application/json; charset=utf-8", "organization": self.organizacao, "Authorization": self.token_fluid }
         if id_empresa_origem  != 1: id_empresa_origem = self.depara(id_empresa_origem)
@@ -791,7 +874,7 @@ class Fluid:
             "destino": nodo, # nodo destino da arvore do processo, para onde vai qdo protocolar
             "parecer": mensagem, # mensagem para escrever no parecer ao protocolar
             "parecer_restrito": 0,
-            "usuario": self.id_usuario, # id usuario fluid que esta realizando a operacao por api
+            "usuario": id_usuario, # id usuario fluid que esta realizando a operacao por api
             "empresa_origem": id_empresa_origem, # empresa 1
             "empresa_destino": id_empresa_destino, # usar zero para sede, e para agencia passar cod_fluid referente a agencia , fazer depara. 
             "usuario_destino": usuario_destino
@@ -813,12 +896,25 @@ class Fluid:
             raise Exception(f'Erro ao protocolar processo {cod_processo}: {response.text}')
 
 
+    def tomar_posse(self, cod_processo:str, empresa=1, id_usuario=0):
+        time.sleep(1)        
+        url = f'{self.url_api}/processos/tomar-posse'
+        if id_usuario == 0: id_usuario = self.id_usuario
+        
+        headers = {"organization": self.organizacao, "Authorization": self.token_fluid }
+        param = {"usuario": id_usuario, "empresa": empresa, "processo": cod_processo}
+        res = requests.post(url, headers=headers, json=param)
+
+        if res.status_code != 204: raise Exception(f'Erro ao gravar dados no processo {cod_processo}, {res.text}')
+        print(f'Ok, tomou posse do processo: {cod_processo}')
+        return res.status_code
+
 
 class Whatsapp:
  
     def __init__(self):
-        self.url_api_whats = str(gerador_pwd('url_api_whats', 'senha'))
-        self.token_api_whats = str(gerador_pwd('url_api_whats', 'sistema'))
+        self.url_api_whats = str(gerador_pwd('url_api_whats', 'sistema'))
+        self.token_api_whats = str(gerador_pwd('url_api_whats', 'senha'))
         self.template_informa_novo = str(gerador_pwd('template_informa_novo', 'sistema'))
         self.template_informa_com_img = str(gerador_pwd('template_informa_com_img', 'senha'))
         self.template_informa_com_pdf = str(gerador_pwd('template_informa_com_pdf', 'senha'))
@@ -893,7 +989,6 @@ class Whatsapp:
         return cod_response
 
 
-
 class Sms:
         
     def __init__(self):
@@ -916,8 +1011,109 @@ class Sms:
         cod_response  = response.status_code
         return cod_response
     
-   
+    
+class Emails:
+    import smtplib
+    from email.mime.multipart import MIMEMultipart
+    from email.mime.text import MIMEText
+    from email.mime.application import MIMEApplication
+    
+    def __init__(self):
+        self.user_mail = gerador_pwd('api_email', 'usuario')
+        self.password_mail = gerador_pwd('api_email', 'sistema')
+        self.smtpsrv = gerador_pwd('api_email', 'ip_host')
 
+
+    def enviar_email(self, destinatarios, assunto: str, mensagem='', anexo=None, html_text_img=None, cc=None, cco=None):
+        '''
+        mail.enviar_email('usuario@dominio.com.br', 'titulo aqui', 'msg aqui') \n\n
+        
+        lista_dest = ['usuario@dominio.com.br','appuser@dominio.com.br']\n
+        mail.enviar_email(lista_dest, 'titulo aqui', 'msg aqui')\n\n
+        
+        anexos = ['notas.txt', 'README.md']\n
+        mail.enviar_email('usuario@dominio.com.br', 'titulo aqui', 'msg aqui', anexos)\n\n
+        
+        anexos = ['notas.txt', 'README.md', 'imagem.PNG']\n
+        html_text_img = '<html><body><h1>msg aqui</h1><img src="cid:imagem_aqui.PNG"></body></html>'\n
+        mail.enviar_email('usuario@dominio.com.br', 'titulo aqui', anexos, html_text_img)\n
+        '''
+        import pathlib
+        mail_content = mensagem
+        smtpserver = self.smtplib.SMTP(self.smtpsrv,587)
+        msg = self.MIMEMultipart('mixed')
+        msg = self.MIMEMultipart('alternative')
+        if cco: 
+            msg['Bcc'] = cco if type(cco) == str else ", ".join(cco)
+        if cc: 
+            msg['Cc'] = cc if type(cc) == str else ", ".join(cc)
+            
+        msg['Subject'] = assunto
+        msg['From'] = self.user_mail 
+        msg['To'] = destinatarios if type(destinatarios) == str else ", ".join(destinatarios)
+
+        
+        if html_text_img:
+            msg.attach(self.MIMEText(mail_content + html_text_img, 'html', 'utf-8'))
+        else:
+            msg.attach(self.MIMEText(mail_content,'plain','utf8'))      
+        
+        if anexo:
+            if type(anexo) == str:
+                if anexo:
+                    attachmentPath = anexo
+                    name_file = pathlib.Path(attachmentPath).name
+                    try:
+                        with open(attachmentPath, "rb") as attachment:
+                            p = self.MIMEApplication(attachment.read(),_subtype="png")	
+                            p.add_header('Content-Disposition', "attachment; filename= %s" % name_file) 
+                            msg.attach(p)
+                    except Exception as e:
+                        print(str(e))
+            elif type(anexo) == list:
+                for attachmentPath in anexo:
+                    name_file = pathlib.Path(attachmentPath).name
+                    try:
+                        with open(attachmentPath, "rb") as attachment:
+                            p = self.MIMEApplication(attachment.read(),_subtype="png")	
+                            p.add_header('Content-Disposition', "attachment; filename= %s" % name_file) 
+                            msg.attach(p)
+                    except Exception as e:
+                        print(str(e))
+            
+        #Send the Email Message
+        smtpserver.ehlo()
+        smtpserver.starttls()
+        smtpserver.login(self.user_mail , self.password_mail)
+
+        todos_destinos = []
+        if destinatarios and cc and cco:
+            if isinstance(destinatarios, list): todos_destinos.extend(destinatarios)
+            if isinstance(destinatarios, str): todos_destinos.append(destinatarios)
+            if isinstance(cc, list): todos_destinos.extend(cc)
+            if isinstance(cc, str): todos_destinos.append(cc)
+            if isinstance(cco, list): todos_destinos.extend(cco)
+            if isinstance(cco, str): todos_destinos.append(cco) 
+            smtpserver.send_message (msg, from_addr=self.user_mail, to_addrs=todos_destinos)
+        elif destinatarios and cc:
+            if isinstance(destinatarios, list): todos_destinos.extend(destinatarios)
+            if isinstance(destinatarios, str): todos_destinos.append(destinatarios)
+            if isinstance(cc, list): todos_destinos.extend(cc)
+            if isinstance(cc, str): todos_destinos.append(cc)
+            smtpserver.send_message (msg, from_addr=self.user_mail, to_addrs=todos_destinos)
+        elif destinatarios and cco:
+            if isinstance(destinatarios, list): todos_destinos.extend(destinatarios)
+            if isinstance(destinatarios, str): todos_destinos.append(destinatarios)
+            if isinstance(cco, list): todos_destinos.extend(cco)
+            if isinstance(cco, str): todos_destinos.append(cco) 
+            smtpserver.send_message (msg, from_addr=self.user_mail, to_addrs=todos_destinos)
+        else:
+            if isinstance(destinatarios, list): todos_destinos.extend(destinatarios)
+            if isinstance(destinatarios, str): todos_destinos.append(destinatarios)
+            smtpserver.send_message (msg, from_addr=self.user_mail, to_addrs=todos_destinos)        
+        smtpserver.close()
+        
+                                        
 class Acc:
     import pyautogui as p
     import subprocess
@@ -927,9 +1123,12 @@ class Acc:
     def __init__(self):
         self.usuario_acc = str(gerador_pwd('acc', 'usuario'))
         self.senha_acc = str(gerador_pwd('acc', 'senha'))
+        self.janela_sacg = 'janela'
+        self.janela_siat = 'janela'
+        self.janela_siac = 'janela'
 
     
-    def open_acclient(self, siat_siac_sacg, transacional=True):
+    def open_acclient_old(self, siat_siac_sacg, transacional=True):
         # Open AC Client
         try:
             self.p.sleep(1)
@@ -979,19 +1178,19 @@ class Acc:
         
         if 'SACG' in str(siat_siac_sacg).upper():
             try:
-                posicao = self.p.locateOnScreen(pasta_imagens + 'sacg_branco.png')
+                posicao = self.p.locateOnScreen(pasta_imagens + 'sacg_branco.png', confidence=0.9, grayscale=True)
             except:
-                posicao = self.p.locateOnScreen(pasta_imagens + 'sacg_verde.png')
+                posicao = self.p.locateOnScreen(pasta_imagens + 'sacg_verde.png', confidence=0.9, grayscale=True)
         elif 'SIAT' in str(siat_siac_sacg).upper():
             try:
-                posicao = self.p.locateOnScreen(pasta_imagens + 'siat_branco.png')
+                posicao = self.p.locateOnScreen(pasta_imagens + 'siat_amarelo.png', confidence=0.9, grayscale=True)
             except:
-                posicao = self.p.locateOnScreen(pasta_imagens + 'siat_verde.png')
+                posicao = self.p.locateOnScreen(pasta_imagens + 'siat_branco.png', confidence=0.9, grayscale=True)
         elif 'SIAC' in str(siat_siac_sacg).upper():
             try:
-                posicao = self.p.locateOnScreen(pasta_imagens + 'siac_amarelo.png')
+                posicao = self.p.locateOnScreen(pasta_imagens + 'siac_branco.png', confidence=0.9, grayscale=True)
             except:
-                posicao = self.p.locateOnScreen(pasta_imagens + 'siac_verde.png')
+                posicao = self.p.locateOnScreen(pasta_imagens + 'siac_amarelo.png', confidence=0.9, grayscale=True)
         time.sleep(1)
         self.p.click(posicao)
         print('selecionou o menu: siat, siac, sacg')
@@ -1007,9 +1206,133 @@ class Acc:
         time.sleep(7)
         
            
-    def select_menu_letras(self, letras):
+    def open_acclient(self, siat_siac_sacg: str | list, transacional=True):
+        ''' acc.open_acclient('siac') \n
+         acc.open_acclient(['siat', 'sacg'])'''
+        opcoes = []
+        if isinstance(siat_siac_sacg, str):
+            opcoes.append(siat_siac_sacg)
+        else:
+            opcoes = siat_siac_sacg
+            
+        # Open AC Client
+        try:
+            self.p.sleep(1)
+            os.system('taskkill /F /FI "WindowTitle eq C:\\ProgramData\\ac\\teoff-exe*" /T')
+        except Exception:
+            pass
+        
+        try:
+            os.system('taskkill /F /IM javaw_ac.exe')
+            self.p.sleep(1)
+        except Exception:
+            pass
+        
+        user_acc = self.usuario_acc
+        pw_acclient = self.senha_acc
+         
+        self.subprocess.Popen("C:\\Users\\Public\\Desktop\\AC Client.lnk",shell=True)
+        self.p.sleep(15)
+        
+
+        # pegar retangulo da janela pelo titulo parcial
+        janela = self.p.getWindowsWithTitle('Aplicações Core - Login')[0]
+        janela.activate()
+
+        self.p.press('tab')
+        self.p.press('tab')
+        # digitar usuario
+        self.p.typewrite(user_acc)
+        self.p.press('tab')
+        self.p.typewrite(pw_acclient)
+        self.p.press('tab')
+        self.p.press('enter')
+        print('passou do login')
+
+        self.p.sleep(12)
+        # pegar retangulo da janela pelo titulo parcial
+        janela = self.p.getWindowsWithTitle('AC Client')[0]
+        janela.activate()
+        janela.left
         self.p.sleep(1)
-        janela = self.p.getWindowsWithTitle('teoff-exe')[0]
+        self.p.press('pgdn')
+
+        # Selecionar o MENU SIAT
+        posicao = 0
+        pasta_imagens = user_site_packages +  '\\rpa_coop\\img\\'
+        
+                   
+        
+        if transacional:
+            self.p.moveTo(janela.left + 48, janela.top + 165)
+            time.sleep(1)
+            self.p.click()
+            # self.p.doubleClick()
+        else:
+            self.p.moveTo(janela.left + 48, janela.top + 245)
+            self.p.click()
+            # self.p.doubleClick()
+        time.sleep(3)
+            
+   
+
+        num_menu = 0
+        self.janela_sacg = janela
+        self.janela_siat = janela
+        self.janela_siac = janela
+        
+        opcoes = [x.upper() for x in opcoes]
+        
+        for menu in opcoes:
+            if menu == 'SACG':
+                # Abrir SACG
+                try:
+                    posicao = self.p.locateOnScreen(pasta_imagens + 'sacg_branco.png', confidence=0.9, grayscale=True)
+                except:
+                    posicao = self.p.locateOnScreen(pasta_imagens + 'sacg_verde.png', confidence=0.9, grayscale=True)
+                self.p.doubleClick(posicao)
+                time.sleep(7)
+                self.janela_sacg = self.p.getWindowsWithTitle('teoff-exe')[num_menu]
+                print('clicou no menu: sacg')
+                janela.activate()
+            elif menu == 'SIAT':
+                # Abrir SIAT
+                try:
+                    posicao = self.p.locateOnScreen(pasta_imagens + 'siat_amarelo.png', confidence=0.9, grayscale=True)
+                except:
+                    posicao = self.p.locateOnScreen(pasta_imagens + 'siat_branco.png', confidence=0.9, grayscale=True)
+                self.p.doubleClick(posicao)
+                time.sleep(7)
+                self.janela_siat = self.p.getWindowsWithTitle('teoff-exe')[num_menu] 
+                print('clicou no menu: siat')
+                janela.activate()
+            elif menu == 'SIAC':
+                try:
+                    posicao = self.p.locateOnScreen(pasta_imagens + 'siac_branco.png', confidence=0.9, grayscale=True)
+                except:
+                    posicao = self.p.locateOnScreen(pasta_imagens + 'siac_amarelo.png', confidence=0.9, grayscale=True)
+                self.p.doubleClick(posicao)
+                time.sleep(7)
+                self.janela_siac = self.p.getWindowsWithTitle('teoff-exe')[num_menu]
+                print('clicou no menu: siac')
+                janela.activate()
+            time.sleep(1)
+        return self.janela_sacg, self.janela_siat, self.janela_siac
+
+             
+    def select_menu_letras(self, letras, nome_janela=None):
+        '''acc.select_menu_letras(letras) \n
+         acc.select_menu_letras(letras, nome_janela='sacg')'''
+        self.p.sleep(1)
+        nome_janela = str(nome_janela).upper()
+        if nome_janela == 'SIAT':
+            janela = self.janela_siat
+        elif nome_janela == 'SIAC':
+            janela = self.janela_siac
+        elif nome_janela == 'SACG':
+            janela = self.janela_sacg
+        else:
+            janela = self.p.getWindowsWithTitle('teoff-exe')[0]
         janela.activate()
         # Selecionar o Menu de opções
         self.p.sleep(1)
@@ -1076,15 +1399,26 @@ class Acc:
         else:
             print('ops funcao entende apenas 2, 3, 4, 5, 6 ou 7 letras')
             
-                
-    def get_text(self, ini_linha=22, fim_linha=632, topo1=407, topo2=407):
+                  
+    def get_text(self, ini_linha=22, fim_linha=632, topo1=410, topo2=415, nome_janela=None):
+        ''' acc.get_text('Retorna ao Sistema')\n
+         acc.get_text('Retorna ao Sistema', nome_janela = 'sacg')'''
         time.sleep(1)
-        janela = self.p.getWindowsWithTitle('teoff-exe')[0]
+        nome_janela = str(nome_janela).upper()
+        if nome_janela == 'SIAT':
+            janela = self.janela_siat
+        elif nome_janela == 'SIAC':
+            janela = self.janela_siac
+        elif nome_janela == 'SACG':
+            janela = self.janela_sacg
+        else:
+            janela = self.p.getWindowsWithTitle('teoff-exe')[0]
+  
         time.sleep(1)
         janela.activate()
         self.p.moveTo(janela.left + ini_linha, janela.top + topo1)
         self.p.sleep(1)
-        self.p.dragTo(janela.left + fim_linha, janela.top + topo2, 0.8, button='left')
+        self.p.dragTo(janela.left + fim_linha, janela.top + topo2, 1.5, button='left')
         self.p.moveTo(janela.left + ini_linha, janela.top + topo2)
         self.p.rightClick()
         capturado = self.pyperclip.paste()
@@ -1092,17 +1426,19 @@ class Acc:
         return capturado            
             
             
-    def exist_text(self, texto_esperado, max_tentativas=7, segundos_entre_tentativas=3, ini_linha=22, fim_linha=632, topo1=407, topo2=407, continua_seerro=False):
+    def exist_text(self, texto_esperado, max_tentativas=7, segundos_entre_tentativas=3, ini_linha=22, fim_linha=632, topo1=412, topo2=412, continua_seerro=False, nome_janela=None):
+        ''' acc.exist_text('Retorna ao Sistema')\n
+         acc.exist_text('Retorna ao Sistema', nome_janela = 'sacg')'''
         time.sleep(1)
         self.pyperclip.copy('')
         tentativas = 0
         time.sleep(1)
-        captura = self.get_text(ini_linha, fim_linha, topo1, topo2)
+        captura = self.get_text(ini_linha, fim_linha, topo1, topo2, nome_janela = nome_janela)
         resultado = True
         while not texto_esperado in captura and tentativas < max_tentativas:
             print('esperando texto: ', texto_esperado)
             self.p.sleep(segundos_entre_tentativas)
-            captura = self.get_text(ini_linha, fim_linha, topo1, topo2)
+            captura = self.get_text(ini_linha, fim_linha, topo1, topo2, nome_janela = nome_janela)
             tentativas += 1
             if tentativas == max_tentativas:
                 resultado = False
@@ -1111,8 +1447,7 @@ class Acc:
             raise Exception(f'Execução pausada. O texto: "{texto_esperado}" não foi localizado durante a execução do robô.')
         return resultado
  
-   
-           
+         
 class Monitorar:
         
     import socket
@@ -1223,9 +1558,7 @@ class Monitorar:
         print()
         return df
     
-            
-        
-         
+                          
 class Escrever_por_extenso:  
             
     def __init__(self):
@@ -1296,8 +1629,7 @@ class Escrever_por_extenso:
         taxa_extenso = texto_e + ' virgula ' + texto_d + ' por cento'    
         return taxa_extenso.upper()
         
-            
-             
+                     
 class Gerador_de_codigo:
     
     def __init__(self):
@@ -1384,17 +1716,251 @@ print(df2)'''
         file.close()        
         self.comentar_linha(script_file_path, 'gerador_de_codigo.')
         
+           
+class Selenium:
+    
+    def __init__(self):
+        pass
+    
+    from selenium import webdriver
+    from selenium.webdriver.common.by import By
+    from selenium.webdriver.support.ui import WebDriverWait
+    from selenium.webdriver.common.action_chains import ActionChains
+    from selenium.webdriver.support import expected_conditions as ec
+    from selenium.webdriver.support.ui import Select
+    from selenium.webdriver.common.keys import Keys
+    from selenium.webdriver.common.alert import Alert
+    
+    from selenium.webdriver.chrome.service import Service as ChromeService 
+    from webdriver_manager.chrome import ChromeDriverManager
+    from selenium.webdriver.chrome.options import Options as chrome_options
+    
+    from selenium.webdriver.edge.service import Service as EdgeService
+    from webdriver_manager.microsoft import EdgeChromiumDriverManager
+    from selenium.webdriver.edge.options import Options as edge_options
+    
+    
+    def driver_chrome(self):
+        driver = self.webdriver.Chrome(service=(self.ChromeService(self.ChromeDriverManager().install())))
+        return driver
+    
+    
+    def driver_edge(self):
+        driver = self.webdriver.Edge(service=(self.EdgeService(self.EdgeChromiumDriverManager().install())))
+        return driver
+    
+    
+    def aguardar_elemento(self, driver, xpath, espera_em_segundos=60):
+        '''Espera por um elemento até o tempo máximo definido, interrompe a espera assim que encontrar o elemento'''
+        elemento_esperado = self.WebDriverWait(driver, espera_em_segundos).until(self.ec.visibility_of_element_located((self.By.XPATH, xpath)))
+        encontrou = str(elemento_esperado.is_displayed())
+        return encontrou
         
-     
+        
+class Dia_util:
+    
+    ano_atual = int(datetime.now().strftime('%Y'))
+    dd = int(datetime.now().strftime('%d'))
+    mm = int(datetime.now().strftime('%m'))
+    yyyy = int(datetime.now().strftime('%Y'))
+      
+      
+    def feriados_nacionais(self, ano= ano_atual, retorna=True, imprime=False):
+        self.ano = int(ano)
+        datas_arr = []
+        datas_dict = {}
+        self.calculo_pascoa()
+        
+        # Monta a data exata da Páscoa no Ano
+        dtPA = date(ano, self.mes, self.dia)
+        # Carnaval ocorre 47 dias antes da páscoa
+        dtCN = date.fromordinal(dtPA.toordinal() - 47)
+        # Corpus Christ ocorre 60 dias depois da páscoa
+        dtCC = date.fromordinal(dtPA.toordinal() + 60)
+        # Sexta-feira Santa ocorre 2 dias antes da páscoa
+        dtSS = date.fromordinal(dtPA.toordinal() - 2)
+        
+        # Ano Novo
+        dt_aux = f'01/01/{self.ano}'
+        datas_arr.append(dt_aux)
+        datas_dict.update({dt_aux : 'Confraternização - Ano Novo'})
+        
+        # Carnaval
+        dt_aux = dtCN.strftime('%d/%m/%Y')
+        datas_arr.append(dt_aux)
+        datas_dict.update({dt_aux : 'Carnaval - facultativo'})
+        
+        # Sexta-feira Santa
+        dt_aux = dtSS.strftime('%d/%m/%Y')
+        datas_arr.append(dt_aux)
+        datas_dict.update({dt_aux : 'Sexta-feira Santa'})
+        
+        # Pascoa
+        dt_aux = dtPA.strftime('%d/%m/%Y')
+        datas_arr.append(dt_aux)
+        datas_dict.update({dt_aux : 'Pascoa'})
+        
+        # Tiradentes
+        dt_aux = f'21/04/{self.ano}'
+        datas_arr.append(dt_aux)
+        datas_dict.update({dt_aux : 'Tiradentes'})
+        
+        # Dia do Trabalho
+        dt_aux = f'01/05/{self.ano}'
+        datas_arr.append(dt_aux)
+        datas_dict.update({dt_aux : 'Dia do Trabalho'})
+        
+        # Corpus Christ
+        dt_aux = dtCC.strftime('%d/%m/%Y')
+        datas_arr.append(dt_aux)
+        datas_dict.update({dt_aux : 'Corpus Christ - facultativo'})
+        
+        # 07 de Setembro - Independencia do Brasil
+        dt_aux = f'07/09/{self.ano}'
+        datas_arr.append(dt_aux)
+        datas_dict.update({dt_aux : '07 Setembro - Independencia do Brasil'})
+        
+        # 12 de Outubro - Nossa Sra Aparecida
+        dt_aux = f'12/10/{self.ano}'
+        datas_arr.append(dt_aux)
+        datas_dict.update({dt_aux : '12 de Outubro - Nossa Sra Aparecida'})
+        
+        # 02 de Novembro - Finados
+        dt_aux = f'02/11/{self.ano}'
+        datas_arr.append(dt_aux)
+        datas_dict.update({dt_aux : '02 de Novembro - Finados'})
+        
+        # 15 de Novembro - Proclamação da República
+        dt_aux = f'15/11/{self.ano}'
+        datas_arr.append(dt_aux)
+        datas_dict.update({dt_aux : '15 de Novembro - Proclamação da República'})
+        
+        # Natal
+        dt_aux = f'25/12/{self.ano}'
+        datas_arr.append(dt_aux)
+        datas_dict.update({dt_aux : 'Natal'})
+                   
+        self.feriados = datas_arr
+        
+        if imprime:
+            # Imprimir data e descrição
+            for dt, descr in datas_dict.items():
+                print(dt, descr)
+                
+        if retorna:
+            # return datas_dict
+            return datas_arr
+    
+    
+    def dias_uteis_mes(self, mes=mm, ano=yyyy, imprime=False):
+        mes = int(mes)
+        ano = int(ano)
+        import calendar
+        calc_dias = calendar.monthrange(ano, mes)
+        total_dias_mes = calc_dias[1] 
+        
+        semana = [
+            'Segunda-feira',
+            'Terça-feira',
+            'Quarta-feira',
+            'Quinta-Feira',
+            'Sexta-feira',
+            'Sábado',
+            'Domingo'
+            ]
+        
+        self.feriados_nacionais(ano, False)
+        feriados = self.feriados
+        dias_uteis_br = []
+        dias_uteis_us = []
+        
+        for x in range(1, total_dias_mes+1):
+            dia_us = date(ano, mes, x)
+            dia_br = str(x).zfill(2) + '/' + str(mes).zfill(2) + '/' + str(ano).zfill(4)
+            indice_semana = dia_us.weekday()
+            dia_da_semana = semana[indice_semana]
+            if dia_da_semana != 'Sábado' and dia_da_semana != 'Domingo':
+                if dia_br not in feriados:
+                    if imprime:
+                        print(dia_br, dia_da_semana)
+                    dias_uteis_br.append(dia_br)
+                    dias_uteis_us.append(str(ano).zfill(4) + '/' + str(mes).zfill(2) + '/' + str(x).zfill(2))
+        
+        # return dias_uteis_us
+        return dias_uteis_br
+
+    
+    def hoje_eh_dia_util(self, dia=dd, mes=mm, ano=yyyy):
+        hoje = str(dia).zfill(2) + '/' + str(mes).zfill(2) + '/' + str(ano).zfill(4)
+        dias_uteis_br = self.dias_uteis_mes(mes, ano, False)
+        # print()
+        # print('hoje: ', hoje)
+        if hoje in dias_uteis_br:
+            # print('OK - Hoje eh dia útil')
+            util_day = True
+        else:
+            # print('NAO - Hoje não eh dia útil')
+            util_day = False
+        return util_day
+            
+
+    def calculo_pascoa(self):
+        p1 = (19 * (self.ano % 19) + 24) % 30
+        p2 = (2 * (self.ano % 4) + 4 * (self.ano % 7) + 6 * p1 + 5) % 7
+        res = p1 + p2
+        if res > 9:
+            self.dia = res - 9
+            self.mes = 4
+        else:
+            self.dia = res + 22
+            self.mes = 3
 
 
+    def dia_util_anterior(self, dd_mm_yy=True, yy_mm_dd=False):
+        hoje = datetime.now()
+        dia_anterior = (hoje - timedelta(days=1)).strftime('%d-%m-%Y')
+        eh_util = False
+        while not eh_util:
+            hoje = hoje - timedelta(days=1)
+            dd = hoje.strftime('%d')
+            mm = hoje.strftime('%m')
+            yy = hoje.strftime('%Y')
+            eh_util = self.hoje_eh_dia_util(dd, mm, yy)
+            if eh_util:
+                dia_br = dd.zfill(2) + '-' + mm.zfill(2) + '-' + yy.zfill(4)
+                dia_us = yy.zfill(4) + '-' + mm.zfill(2) + '-' + dd.zfill(2)
+                
+        if yy_mm_dd:
+            dia_anterior = dia_us
+        else:
+            dia_anterior = dia_br
+            
+        return dia_anterior
+    
+    
+    def dia_util_posterior(self, dd_mm_yy=True, yy_mm_dd=False):
+        hoje = datetime.now()
+        dia_util_proximo = (hoje + timedelta(days=1)).strftime('%d-%m-%Y')
+        eh_util = False
+        while not eh_util:
+            hoje = hoje + timedelta(days=1)
+            dd = hoje.strftime('%d')
+            mm = hoje.strftime('%m')
+            yy = hoje.strftime('%Y')
+            eh_util = self.hoje_eh_dia_util(dd, mm, yy)
+            if eh_util:
+                dia_br = dd.zfill(2) + '-' + mm.zfill(2) + '-' + yy.zfill(4)
+                dia_us = yy.zfill(4) + '-' + mm.zfill(2) + '-' + dd.zfill(2)
+                
+        if yy_mm_dd:
+            dia_util_proximo = dia_us
+        else:
+            dia_util_proximo = dia_br
+            
+        return dia_util_proximo
+        
+        
 
 
-          
-  
-
-
-
-
-
-
+    
+   
