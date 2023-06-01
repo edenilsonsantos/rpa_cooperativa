@@ -14,6 +14,13 @@ escrever_por_extenso = Escrever_por_extenso()
 numero_por_extenso = escrever_por_extenso.numero_por_extenso
 taxa_percentual_por_extenso = escrever_por_extenso.taxa_por_extenso
 gerador_de_codigo = Gerador_de_codigo()
+selenium = Selenium()
+mail = Emails()
+dia_util = Dia_util()
+adobe = Adobe()
+
+
+
 
 
 
