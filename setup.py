@@ -4,9 +4,10 @@ from setuptools import setup
 with open("README.md", "r") as arq:
     readme = arq.read()
 
+
 setup(
     name="rpa_cooperativa",
-    version="1.0.38",
+    version="1.0.55",
     license='MIT License',
     author="Edenilson Fernandes dos Santos",
     author_email='santoeen@gmail.com',
@@ -37,9 +38,9 @@ setup(
     ],
     python_requires='>=3.8',
     install_requires=['wheel', 'pandas', 'openpyxl', 'cryptography', 'xlsxwriter', 'xlrd', 'openpyxl','selenium', 'webdriver_manager', 'easygui', 'pyperclip', 'mysql-connector-python==8.0.28',
-                      'pymysql', 'pyodbc', 'sqlalchemy==1.4.37', 'psycopg2', 'psycopg2-binary', 'denodo-sqlalchemy', 'pillow', 'requests==2.28.1', 'urllib3==1.26.9', 
-                      'certifi==2022.5.18.1', 'pyopenssl==22.0.0', 'idna==3.3', 'charset-normalizer==2.0.12', 'pyautogui',
+                      'pymysql', 'pyodbc', 'sqlalchemy==1.4.37', 'psycopg2', 'psycopg2-binary', 'denodo-sqlalchemy', 'pillow', 'requests>=2.28.1', 'urllib3>=1.26.9', 
+                      'certifi>=2022.5.18.1', 'pyopenssl>=22.0.0', 'idna>=3.3', 'charset-normalizer>=2.0.12', 'pyautogui',
                       'pyrect', 'pyscreeze', 'pytz', 'graypy', 'reportlab', 'psutil', 'requests-html', 'paramiko','opencv-python',
                       'pytesseract', 'xmltodict', 'pywin32', 'pywinauto', 'beautifulsoup4', 'mechanize', 'matplotlib', 
-                      'Unidecode', 'WMI', 'tabulate', 'python-dateutil==2.8.2']
+                      'Unidecode', 'WMI', 'tabulate', 'python-dateutil>=2.8.2', 'secure-smtplib']
 )
